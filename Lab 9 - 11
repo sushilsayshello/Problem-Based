@@ -1,0 +1,183 @@
+Step-by-Step Docker Installation and Container Setup Guide
+1. Install Docker on Windows 10 & 11
+Download Docker Desktop:
+
+Go to the Docker Desktop official website and download the Docker Desktop installer for Windows.
+Run the downloaded installer.
+During the installation, ensure that "Use the WSL 2 based engine" is checked.
+Once the installation is complete, launch Docker Desktop.
+Install Docker Dependencies:
+
+Ensure Hyper-V and Containers features are enabled. To do so:
+Open Control Panel → Programs → Turn Windows features on or off.
+Check both Hyper-V and Containers, then restart your system.
+Verify Docker Installation:
+
+bash
+Copy code
+docker --version
+2. Docker on Windows Server (Optional)
+If using Windows Server, follow these steps:
+
+Install DockerMsftProvider:
+
+powershell
+Copy code
+Install-Module DockerMsftProvider -Force
+Download Docker Installation Script:
+
+powershell
+Copy code
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -OutFile install-docker-ce.ps1
+Run Docker Installation Script:
+
+powershell
+Copy code
+./install-docker-ce.ps1
+Verify Docker Installation:
+
+bash
+Copy code
+docker --version
+3. Docker Image Building and Running
+Create a Dockerfile:
+
+A simple Dockerfile example for a web server:
+dockerfile
+Copy code
+# Use a base image
+FROM mcr.microsoft.com/windows/servercore:ltsc2019
+
+# Install IIS (web server)
+RUN powershell -Command Add-WindowsFeature Web-Server
+
+# Expose port 80
+EXPOSE 80
+
+# Start IIS
+CMD ["powershell", "Start-Service", "w3svc"]
+Build the Image:
+
+Once your Dockerfile is ready, build the image:
+bash
+Copy code
+docker build -t mywebserver:latest .
+List Docker Images:
+
+To verify the image build:
+bash
+Copy code
+docker images
+4. Running a Docker Container
+Run the Container:
+
+To run a Docker container from the image:
+bash
+Copy code
+docker run -d -p 80:80 --name mywebservercontainer mywebserver:latest
+Explanation:
+-d: Run container in detached mode (in the background).
+-p 80:80: Map port 80 of the container to port 80 on the host.
+--name: Assigns a name to the container.
+List Running Containers:
+
+bash
+Copy code
+docker ps
+Access the Container:
+
+To access the container's command line:
+bash
+Copy code
+docker exec -it mywebservercontainer powershell
+5. Install XAMPP inside the Container
+Download XAMPP:
+
+Download xampsetup.exe from the official XAMPP website to your host machine.
+Copy the file to the Docker container:
+bash
+Copy code
+docker cp C:\Path\to\xampsetup.exe mywebservercontainer:C:\
+Install XAMPP:
+
+Log into the container:
+bash
+Copy code
+docker exec -it mywebservercontainer powershell
+Run the XAMPP installer inside the container:
+powershell
+Copy code
+cd C:\
+.\xampsetup.exe --unattendedmodeui minimal --mode unattended
+Wait for the installation to complete. Check the C:\xampp folder to verify the installation.
+6. Configure Apache in XAMPP
+Start Apache:
+
+Navigate to the Apache bin directory:
+powershell
+Copy code
+cd C:\xampp\apache\bin
+Start the Apache service:
+powershell
+Copy code
+.\apache_installservice.bat
+Start-Service apache2.4
+Restart/Stop Apache:
+
+powershell
+Copy code
+Stop-Service apache2.4
+Start-Service apache2.4
+Verify Apache is Running:
+
+Open your browser and access the server by visiting http://localhost or http://<container-IP>.
+7. Managing Docker Containers
+Stop a Container:
+
+bash
+Copy code
+docker stop mywebservercontainer
+Start a Stopped Container:
+
+bash
+Copy code
+docker start mywebservercontainer
+Remove a Container:
+
+bash
+Copy code
+docker rm mywebservercontainer
+8. Publishing Docker Images to Docker Hub
+Tag the Docker Image:
+
+Tag the image with your Docker Hub username before pushing it:
+bash
+Copy code
+docker tag mywebserver:latest yourdockerhubusername/mywebserver:version1
+Push the Image to Docker Hub:
+
+bash
+Copy code
+docker push yourdockerhubusername/mywebserver:version1
+9. Additional Useful Docker Commands
+List all containers (including stopped ones):
+
+bash
+Copy code
+docker ps -a
+Remove all stopped containers:
+
+bash
+Copy code
+docker container prune
+List Docker networks:
+
+bash
+Copy code
+docker network ls
+Remove unused Docker images:
+
+bash
+Copy code
+docker image prune -a
+This detailed script covers everything from installation to running and managing Docker containers, setting up XAMPP, and publishing Docker images. If you need more specific details or modifications, let me know!
