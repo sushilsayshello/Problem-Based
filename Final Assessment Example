@@ -1,1 +1,232 @@
+Name : Binod Adhikari
+Student Id: s4628483
+Test
+Task 1
+The Finance department of the company named Adhikari requires a service to be high
+available.
+For the service to be highly available the network design would include.
+1. a domain controller,
+2. a storage server,
+3. a failover cluster with at least two nodes,
+4. an application server running the service
+The following design would be implemented.
+Switches:
+LabServicesSwitch
+Ip: 172.20.83.1/24
+myHeartBeat Network
+Ip;172.20.283.0/24
+myStorageNet
+ip: 172.20.83.0/24
+Domain controller - AdhikariADC
+IP:172.20.83.1
+The domain controller should be connected with the LabServicesSWitch and myStorageNet
+Storage Server- AdhikariISCSI
+Ip: 172.20.83.3
+We will create two Storage Server iSCSI disk named AdhikariStorage-1 of 300 G and
+AdhikariStorage-2 of 400 G and create three Iscsi targets and disk of size 40 G, 100 G and
+80 G inside AdhikariStorage-1 .
+The storage server should be connected with the LabServicesSwitch and myStorageNet.
+Host VM
+AdhikariVH-1
+*Memory- 12 G
+AdhikariVH-2
+Memory-12 G
+AdhikariVH-1 and AdhikariVH-2 needs to be connected with myStorageNet with IP:
+172.20.83.101 and 172.20.83.102 respectively. And also with myHeartBeat Network to form
+a cluster . the ip will be assigned as 172.20.283.101 and 172.20.283.102 for AdhikariVH-1
+and AdhikariVH-2 respectively. They will be connected with LabServicesSwitch and Ip will
+be assigned BY DHCP.
+Cluster Name: AdhikariCluster
+Cluster Structure
+ Cluster node 1 - nested VM with windows 10- 12 G disk (VM installed OS,
+vhdx at the storage server) , 5G Ram
+ Cluster node 2 – nested VM only 12G disk, 4G Ram
+ AD domain controller with Admin Center 18 G disk, 2G Ram
+ Storage Server – 32G disk, 2G Ram
+ Networks:
+ Cluster network sharing storage iSCSI server, myStorageNet
+ Heartbeat network to keep the cluster up, myHeartBeat
+ Public network to access the internet , LabServicesSwitch (optional)
+Solution Script For AdhikariVH-1
+Creating AdhikariVH-1.
+Scripts to be run in miaoHost
+#create AdhikariVH-1 VM
+$VMName="AdhikariVH-1"
+$adapters=@("storageNIC", "InternetNIC" ,"HeartbeatNIC")
+$mac1="00-00-03-90-02-01"
+$mac2="00-00-03-90-02-02"
+$mac3="00-00-03-90-02-03"
+$macs=@($mac1,$mac2,$mac3)
+$switches=@("myStorageNet", "LabServicesSwitch","myHeartbeatNet")
+# note the mac range needs to be valid
+New-VM -Name $VMName -BootDevice VHD -VHDPath c:\miao\vhds\miaoVH1.vhdx -Path C:\miao -Generation 2
+SET-VMProcessor –VMName $VMName –count 3
+Set-VMMemory $VMName -DynamicMemoryEnabled $true -MinimumBytes 1GB
+-StartupBytes 4GB -MaximumBytes 4GB -Priority 80 -Buffer 25
+Set-VMProcessor -VMName $VMName -ExposeVirtualizationExtensions $true
+Get-VMNetworkAdapter -VMName $VMName | Set-VMNetworkAdapter
+-MacAddressSpoofing On
+remove-VMNetworkAdapter -VMName $VMName -Name "Network Adapter"
+#only cluster node needs hearbeat network
+For ($i=0; $i -lt 3; $i++) {
+$adaptername=$adapters[$i]
+$switchname=$switches[$i]
+$mac=$macs[$i]
+Add-VMNetworkAdapter -VMName $VMName -Name $adaptername -SwitchName
+$switchname -StaticMacAddress $mac
+}
+After creating AdhikariVH-1 , Login in It and run following configuration scripts
+# login to the domain controller to setup, once have vhdx, later do not need to
+repeat
+#-----------------------------------------------
+$VMName="AdhikariVH-1"
+# add hyperv and admin functions
+#-----------------------------------
+rename-computer $VMName
+Install-WindowsFeature -Name Hyper-V IncludeManagementTools -Restart 
+#reboot and login again
+#allow ping through firewall
+netsh advfirewall firewall add rule name="ICMP Allow incoming
+V4 echo request" protocol=icmpv4:8,any dir=in action=allow
+$adapters=@("storageNIC", "InternetNIC" ,"HeartbeatNIC")
+$mac1="00-00-03-90-02-01"
+$mac2="00-00-03-90-02-02"
+$mac3="00-00-03-90-02-03"
+$macs=@($mac1,$mac2,$mac3)
+<number>
+#config storage network
+ $i=0
+$mac1=$macs[$i]
+$adaptername=$adapters[$i]
+$ipadd='172.20.283.101’
+$gateway='172.20.83.1’
+$netif=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).InterfaceIndex
+$netname=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).name
+Remove-NetIpAddress -InterfaceIndex $netif -AddressFamily IPv4 -Confirm:$false
+Remove-NetRoute -InterfaceIndex $netif -AddressFamily IPv4 -Confirm:$false
+New-NetIPAddress -IPAddress $ipadd -prefixlength 24 -DefaultGateway $gateway
+-InterfaceIndex $netif
+rename-netadapter -name $netname -newName $adaptername
+#add dns
+#set the dns server
+set-DnsClientServerAddress -InterfaceIndex $netif -ServerAddresses ($gateway)
+#hearbeat network
+#--------------------------
+$i=2
+$mac1=$macs[$i]
+$adaptername=$adapters[$i]
+$ipadd='172.20.283.101’
+$gateway='172.20.283.102’
+$netif=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).InterfaceIndex
+$netname=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).name
+Remove-NetIpAddress -InterfaceIndex $netif -AddressFamily IPv4 -Confirm:$false
+Remove-NetRoute -InterfaceIndex $netif -AddressFamily IPv4 -Confirm:$false
+New-NetIPAddress -IPAddress $ipadd -prefixlength 24 -DefaultGateway $gateway
+-InterfaceIndex $netif
+rename-netadapter -name $netname -newName $adaptername
+#config internet network
+#--------------------------
+$i=1
+$mac1=$macs[$i]
+$adaptername=$adapters[$i]
+$netif=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).InterfaceIndex
+$netname=(Get-NetAdapter | where {$_.MacAddress -eq $mac1}).name
+rename-netadapter -name $netname -newName $adaptername
+#join domain domain and dns
+#-------------------------------------
+#add mStorage1 to the domain, if the image is with domain, then this step can be
+skipped
+# use administrator password: yuan1234W
+add-computer –domainname Adhikari.NIT3222 -Credential Adhikari\administrator
+-restart –force
+For a remote host which maintain a replica of the application server.
+In storage server AdhikariISCSI we add ISCSI server feature and add create iscsi virtual disk.
+We connect AdhikariVH-1 vm MH-1 and AdhikariVH-2 vm VH-2 to iscsi virtual disk using
+iscsi initator to connect to disk.
+We install nested VM OS. Now both VH-1 and VH-2 can see it. If the VM vhd
+is kept at iSCSI Server, the live migration of the nested VM will only be the
+memory and states, not the hard drive.
+Live migration GUI steps
+1. Open Failover Cluster Manager and connect to your Hyper-V cluster.
+2. Select Roles within your cluster.
+3. Select the VM to migrate in the Roles pane.
+4. Click Move in the Actions pane.
+5. Click Live Migration.
+6. Click Select Node
+7. Select the cluster node to which you’ll move the VM. Click OK.
+8. VM status changes to Live Migrating. Information shows the migration
+progress.
+9. Post-migration VM status changes back to Running.
+10. Users may have to log back in, but their session and work will be
+preserved
+during the migration.
+.
+# use management tools, cluster administrator GUI to create cluster
+#cluster needs an ip address, give 172.20.83.200, add both the AdhikariVH-1 and
+AdhikariVH-2
+Install fallover cluster role with AdhikariVH-1, AdhikariVH-2
+Install-WindowsFeature -Name Failover-Clustering –IncludeManagementTools
+Install-WindowsFeature -name Multipath-IO
+ after installation, it requires a reboot
+#creating cluster needs to be done either with AdhikariH-1 or AdhikaeriVH-2, not both
+New-Cluster -Name AdhikariCluster -Node AdhikariVH-1, AdhikariVH-2 -StaticAddress
+172.20.83.200
+We need to add VM role to the cluster, from there we can do migration of VMs between
+cluster nodes.
+After migration is completed even a VM is turned of we can see both VM in running State.
+Task 2
+A company named Adhikari needs an web application . the following is design solution.
+We will use container to design a solution with XAMPP and Wordpress.
+Implementation of containers
+- install docker
+- pull images
+- run to generate containers
+- run in background and check status
+<number>
+Build an application with the container
+ Install xampp (mysql, apache and php)
+ Install apache service
+ Install mysql
+ Install wordpress
+ Setup website
+Containers are lightweight virtualized isolation objects for running applications without
+impacting the rest of your system. The isolation ensures the container has no knowledge of,
+and no interaction with, other applications or processes that exist on the same host
+machine. Server containers share server core with the host; A server container isolates the
+environment yet is very efficient.
+Scripts to run docker container
+find-module -name dockermsft*
+Find-module –name docker*prov* -repository psgallery
+Install-module –name DockerMsftProvider –repository psgallery –force
+install-package -name docker -providername dockermsftprovider
+# show existing images
+docker images
+#download an image
+docker pull mcr.microsoft.com/windows/servercore:ltsc2019
+docker pull mcr.microsoft.com/windows/servercore:1809
+docker pull mcr.microsoft.com/windows/servercore:1803
+#run a container
+docker run mcr.microsoft.com/windows/servercore:1809 cmd /c echo hello class
+ # run container in detached mode
+docker run -d mcr.microsoft.com/windows/servercore:1809 ping localhost -t
+# check docker info
+docker info
+docker stop binod
+#list runing containers
+docker ps
+#run a container without exiting, and connect to it with powershell
+docker run --name Adhikar -d mcr.microsoft.com/windows/servercore:1809 ping localhost -t
+docker exec -it Adhikar powershell
+$WebClient2 = New-Object System.Net.WebClient
+$WebClient2.DownloadFile("https://www.apachefriends.org/xampp-files/7.2.29/xampp-windowsx64-7.2.29-0-VC15-installer.exe","C:\xampsetup.exe")
+Screensorts
+Downloading docer images, creating containers and running them.
+Installing xampp, apache and mysql.
+Accessing phpMyAdmin
+Downloading and unzip wordpress
+Creating new user and database named Adhikari
+Grantying user previlage to Database
+Setup wordpress site and ready wordpress site
+Creating container image and deploying
+Changing logo and importing existing design
 
