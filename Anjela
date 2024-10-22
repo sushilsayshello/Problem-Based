@@ -1,0 +1,148 @@
+To address the scenario described in the questions based on the provided company structure and network details, here's an outline and solution plan using your student ID (Anjela Pokharel, s8089759) with the last two digits "59" for the network design (120.120.59.0/24):
+
+Q1. High Availability Online Shopping Service for Marketing Department
+Solution Design
+The architecture for a high-availability online shopping service includes the following components:
+
+a. Domain Controller (pokharelDC)
+The domain controller will manage users, computers, and resources in the marketing department. It needs to handle authentication, DNS, and network policy enforcement.
+
+Parameters:
+
+Domain name: pokharel.local
+IP: 120.120.59.2
+DNS: Enabled
+Services: Active Directory Domain Services, DNS
+Steps:
+
+Install Active Directory Domain Services (AD DS).
+Configure DNS and DHCP to handle IP address assignments.
+b. Storage Server (pokharelStorage)
+The storage server will store product data, customer details, and transactional information. It will also support iSCSI connections for failover clustering.
+
+Parameters:
+
+IP: 120.120.59.3
+Disk: 500GB for transactional data, 300GB for media storage.
+Services: iSCSI target for cluster storage.
+Steps:
+
+Install iSCSI target server role.
+Configure virtual disks for the cluster.
+Connect cluster nodes to the iSCSI target.
+c. Failover Cluster (pokharelCluster)
+The failover cluster will ensure high availability by running the application service across multiple nodes. In case one node fails, another node will take over the load.
+
+Parameters:
+
+Node 1: pokharelVH1 (IP: 120.120.59.101)
+Node 2: pokharelVH2 (IP: 120.120.59.102)
+Cluster IP: 120.120.59.200
+Steps:
+
+Install failover clustering feature on both nodes.
+Create a failover cluster with the two nodes.
+Configure the cluster to manage the application server.
+d. Nested Application Server (pokharelApp)
+The application server will run the online shopping service. This server will be deployed inside the cluster nodes for redundancy and high availability.
+
+Parameters:
+
+IP: Dynamic (assigned by DHCP)
+Application: eCommerce platform (e.g., Magento or custom-built service)
+Steps:
+
+Deploy the application on the virtual machine.
+Configure the app to use the storage server for data.
+Set up load balancing for the service.
+Script for VH1 Joining Cluster
+Below is a script to add VH1 (pokharelVH1) to the cluster as one of the nodes.
+
+powershell
+Copy code
+# Install the failover cluster feature on VH1
+Install-WindowsFeature -Name Failover-Clustering –IncludeManagementTools
+
+# Set static IP for storage network
+$ipadd='120.120.59.101'
+$gateway='120.120.59.1'
+New-NetIPAddress -IPAddress $ipadd -PrefixLength 24 -DefaultGateway $gateway
+
+# Add VH1 to the domain
+Add-Computer –DomainName pokharel.local -Credential pokharel\Administrator -Restart -Force
+
+# Create a cluster with VH1 and VH2
+New-Cluster -Name pokharelCluster -Node pokharelVH1, pokharelVH2 -StaticAddress 120.120.59.200
+
+# Validate cluster configuration
+Test-Cluster -Node pokharelVH1, pokharelVH2
+Q2. Web Application Using Containers (XAMPP and WordPress)
+Container-Based Solution Design
+
+a. Architecture
+The web application will be containerized using Docker. The architecture will consist of:
+
+Web Server: Running Apache, PHP, and WordPress.
+Database Server: Running MySQL.
+Network: NAT network to allow external access to the web application.
+Volumes: For persistent storage of website content and databases.
+b. Benefits of Using Containers
+
+Isolation: Each service runs in its own container, reducing conflicts.
+Portability: The containerized application can be moved between environments easily.
+Scalability: Containers can be scaled horizontally to meet demand.
+Lightweight: Containers share the host OS kernel, making them faster to start and less resource-intensive than virtual machines.
+c. Setup of Containers
+Steps:
+
+Install Docker.
+Pull required images (Apache, MySQL, WordPress).
+Configure networking and storage volumes.
+bash
+Copy code
+# Install Docker
+sudo apt-get update
+sudo apt-get install docker.io
+
+# Pull images for Apache, MySQL, and WordPress
+docker pull mysql:5.7
+docker pull wordpress:latest
+
+# Create a network for the containers
+docker network create pokharelNet
+
+# Create a volume for persistent storage
+docker volume create wpdata
+d. Setup of Web Server and Database Server (XAMPP)
+XAMPP is not needed since we are directly using Docker containers for Apache, MySQL, and WordPress.
+
+bash
+Copy code
+# Run MySQL container
+docker run -d --name pokharelMySQL --network pokharelNet -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wordpress mysql:5.7
+
+# Run WordPress container
+docker run -d --name pokharelWordPress --network pokharelNet -p 8080:80 -e WORDPRESS_DB_HOST=pokharelMySQL:3306 -e WORDPRESS_DB_USER=root -e WORDPRESS_DB_PASSWORD=root -e WORDPRESS_DB_NAME=wordpress -v wpdata:/var/www/html wordpress:latest
+e. Setup of Content Management System (WordPress)
+Access the WordPress setup via the browser at http://<host IP>:8080 and complete the setup.
+
+f. NAT for the Container
+The -p 8080:80 option in the Docker command ensures that port 8080 on the host maps to port 80 on the container, making the website accessible.
+
+g. Creation of Container Image
+Once everything is set up, you can create a custom image.
+
+bash
+Copy code
+docker commit pokharelWordPress pokharel/wordpress-custom
+h. Publishing the Container
+Push the image to DockerHub or a private repository.
+
+bash
+Copy code
+docker login
+docker push pokharel/wordpress-custom
+Implementing and Deploying the App Container
+After the above steps, deploy the container on a virtual machine, making sure the host machine has Docker installed.
+
+This approach covers the high-availability system for the marketing department (Q1) and a container-based web application with XAMPP and WordPress for the company (Q2). Let me know if you need further adjustments!
